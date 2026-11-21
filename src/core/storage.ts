@@ -12,19 +12,26 @@ const options = { directory, encoding: Encoding.UTF8 };
 let queue = Promise.resolve();
 export async function loadWorkspace(): Promise<Workspace> {
   await Filesystem.mkdir({ path: rootFolder, directory, recursive: true }).catch(() => {});
-  let raw: string;
-  try { const result = await Filesystem.readFile({ path: `${rootFolder}/workspace.json`, ...options }); raw = String(result.data); }
-  catch (error) {
-    const entries = await Filesystem.readdir({ path: rootFolder, directory });
-    if (entries.files.some(f => f.name === 'workspace.json')) throw error;
-    return initialWorkspace();
+  const entries = await Filesystem.readdir({ path: rootFolder, directory });
+  // A complete pending journal is newer than the manifest after an interrupted save.
+  for (const name of ['workspace.pending.json','workspace.json','workspace.backup.json']) {
+    if (!entries.files.some(f => f.name === name)) continue;
+    try {
+      const result = await Filesystem.readFile({ path: `${rootFolder}/${name}`, ...options });
+      const workspace = validateWorkspace(JSON.parse(String(result.data)));
+      // The manifest is a complete recovery copy. Native files remain browsable/importable.
+      return workspace;
+    } catch { /* Try the next intact recovery copy, without overwriting failed data. */ }
   }
-  return validateWorkspace(JSON.parse(raw));
+  if (entries.files.some(f => f.name.startsWith('workspace.'))) throw new Error('Không đọc được dữ liệu chính hoặc bản khôi phục.');
+  return initialWorkspace();
 }
 export function saveWorkspace(workspace: Workspace): Promise<void> {
   const serialized = JSON.stringify(workspace);
   const snapshot = JSON.parse(serialized) as Workspace;
   const operation = queue.catch(() => {}).then(async () => {
+    let previous: Workspace | null = null;
+    try { previous = validateWorkspace(JSON.parse(String((await Filesystem.readFile({ path: `${rootFolder}/workspace.json`, ...options })).data))); } catch { /* first save */ }
     // Write real project files before committing the recoverable workspace manifest.
     for (const project of snapshot.projects) {
       const folder = `${rootFolder}/projects/${project.id}`;
@@ -33,15 +40,18 @@ export function saveWorkspace(workspace: Workspace): Promise<void> {
     }
     await Filesystem.writeFile({ path: `${rootFolder}/workspace.pending.json`, data: serialized, ...options });
     // Keep a last-good manifest before replacing it. No workspace is reset on parse errors.
-    try { await Filesystem.copy({ from: `${rootFolder}/workspace.json`, to: `${rootFolder}/workspace.backup.json`, directory, toDirectory: directory }); } catch { /* first save */ }
-    await Filesystem.rename({ from: `${rootFolder}/workspace.pending.json`, to: `${rootFolder}/workspace.json`, directory, toDirectory: directory });
+    if (previous) await Filesystem.writeFile({ path: `${rootFolder}/workspace.backup.json`, data: JSON.stringify(previous), ...options });
+    await Filesystem.writeFile({ path: `${rootFolder}/workspace.json`, data: serialized, ...options });
+    await Filesystem.deleteFile({ path: `${rootFolder}/workspace.pending.json`, directory });
+    // Reconcile removed/renamed files only after the new manifest is durable.
+    for (const p of previous?.projects ?? []) for (const f of p.files) {
+      if (!snapshot.projects.some(next => next.id === p.id && next.files.some(file => file.path === f.path))) {
+        await Filesystem.deleteFile({ path: `${rootFolder}/projects/${p.id}/${validPath(f.path)}`, directory }).catch(() => {});
+      }
+    }
   });
   queue = operation;
   return operation;
-}
-export async function deleteStoredFile(projectId: string, path: string) {
-  await queue.catch(() => {});
-  await Filesystem.deleteFile({ path: `${rootFolder}/projects/${projectId}/${validPath(path)}`, directory });
 }
 export async function exportProject(project: Project) {
   const entries: Record<string, Uint8Array> = {};

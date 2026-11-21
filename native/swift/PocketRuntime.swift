@@ -30,5 +30,24 @@ public class PocketRuntimePlugin: CAPPlugin, CAPBridgedPlugin {
 
 @objc(PocketViewController)
 public class PocketViewController: CAPBridgeViewController {
-    public override func capacitorDidLoad() { bridge?.registerPluginInstance(PocketRuntimePlugin()) }
+    public override func capacitorDidLoad() {
+        bridge?.registerPluginInstance(PocketRuntimePlugin())
+        #if targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--pocket-self-test") {
+            DispatchQueue.global(qos: .userInitiated).async {
+                let code = "#include <bits/stdc++.h>\nusing namespace std;int main(){freopen(\"BAI.INP\",\"r\",stdin);freopen(\"BAI.OUT\",\"w\",stdout);int a,b;cin>>a>>b;vector<int>v={b,a};sort(v.begin(),v.end());auto[x,y]=pair{v[0],v[1]};optional<int>s=x+y;cout<<*s<<\"\\n\";}"
+                let request: [String: Any] = ["files": [["path": "main.cpp", "content": code]], "stdin": "20 22\n", "inputFile": "BAI.INP", "outputFile": "BAI.OUT", "timeLimitMs": 3000]
+                do {
+                    let json = String(data: try JSONSerialization.data(withJSONObject: request), encoding: .utf8)!
+                    let assets = Bundle.main.resourceURL!.appendingPathComponent("public/toolchain").path
+                    guard let pointer = assets.withCString({ dir in json.withCString { pocket_run(dir, $0) } }) else { return }
+                    let result = String(cString: pointer); pocket_free(pointer)
+                    let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("PocketMinGW")
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try result.write(to: folder.appendingPathComponent("simulator-result.json"), atomically: true, encoding: .utf8)
+                } catch { NSLog("PocketMinGW simulator test: %@", String(describing: error)) }
+            }
+        }
+        #endif
+    }
 }

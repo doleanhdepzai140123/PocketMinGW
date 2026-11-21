@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine, rectangularSelection } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
 import { cpp } from '@codemirror/lang-cpp';
 import { bracketMatching, foldGutter, indentOnInput, syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
@@ -10,7 +10,7 @@ import { searchKeymap, highlightSelectionMatches, openSearchPanel } from '@codem
 import type { SourceFile } from '../core/model';
 
 export interface EditorHandle { insert(text: string): void; undo(): void; redo(): void; search(): void; goto(line: number, column: number): void }
-interface Props { file: SourceFile; fontSize: number; wrap: boolean; onChange(content: string): void; onCursor(line: number, column: number): void }
+interface Props { file: SourceFile; fontSize: number; wrap: boolean; onChange(content: string): void; onCursor(line: number, column: number): void; onHistory(undo: boolean, redo: boolean): void }
 const highlights = HighlightStyle.define([
   { tag: [tags.keyword, tags.modifier], color: 'var(--syntax-keyword)' },
   { tag: [tags.string, tags.character], color: 'var(--syntax-string)' },
@@ -34,6 +34,7 @@ export const CodeEditor = forwardRef<EditorHandle, Props>((props, ref) => {
       EditorView.contentAttributes.of({ 'aria-label': 'Mã nguồn C++', autocorrect: 'off', autocapitalize: 'off', spellcheck: 'false' }),
       wrap.current.of(current.current.wrap ? EditorView.lineWrapping : []),
       EditorView.updateListener.of(u => {
+        current.current.onHistory(undoDepth(u.state)>0, redoDepth(u.state)>0);
         if (u.docChanged && !syncing.current) current.current.onChange(u.state.doc.toString());
         if (u.selectionSet || u.docChanged) { const at = u.state.selection.main.head, line = u.state.doc.lineAt(at); current.current.onCursor(line.number, at - line.from + 1); }
       }),

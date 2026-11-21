@@ -3,6 +3,7 @@
  * console: graphite · axes: dark/grotesk-sans/chromatic-amber · posture: restrained · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E3 S4 R5 V4 · weakest: E, keyboard height and editor tab persistence require device verification */
 /* Hallmark · dismissed 23 · bottom navigation selection is a 2px line above its button, not a viewport fill */
+/* Hallmark · finish-review: subagent · 1 finding · resolved: history and absent-file controls disabled; verified by Playwright and recapture */
 @import url('./tokens.css');
 @import url('./base.css');
 :root {

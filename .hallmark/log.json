@@ -1,0 +1,37 @@
+[
+ {
+  "shape": "app screen",
+  "theme": "console",
+  "axes": [
+   "dark",
+   "grotesk-sans",
+   "chromatic-amber"
+  ],
+  "hero": "app screen, no marketing hero",
+  "nav": "phone bottom navigation; desktop explorer",
+  "footer": "editor status bar",
+  "imagery": "user-supplied PocketMinGW logo; actual C++ editor",
+  "photos": [],
+  "entry": "C++17 editor",
+  "fingerprint": [
+   "workbench",
+   "left explorer",
+   "bottom nav",
+   "code",
+   "dark",
+   "amber"
+  ],
+  "sections": [
+   "editor",
+   "files",
+   "test bench",
+   "output",
+   "settings"
+  ],
+  "signature": "C++ editor with coding key row and HSG test bench",
+  "waived": [],
+  "prompt": "Offline C++17 on Android 12+ and iOS16+, no JIT, Vietnamese HSG practice",
+  "date": "2026-11-21",
+  "mode": "build"
+ }
+]

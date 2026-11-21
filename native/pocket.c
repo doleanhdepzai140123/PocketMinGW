@@ -27,6 +27,8 @@ typedef struct {
   const char **argv; int argc, exit_code;
   const char *input; size_t input_pos, input_len;
   char *output; size_t output_len;
+  char error_detail[512];
+  uint32_t fd_map[1024];
   double deadline;
 } Engine;
 static atomic_bool cancelled = 0;
@@ -140,9 +142,24 @@ m3ApiRawFunction(host_read) {
 m3ApiRawFunction(forward_fs) {
   Engine *e=m3_GetUserData(runtime); IM3Function f=(IM3Function)_ctx->userdata;
   uint32_t n=m3_GetArgCount(f),r=m3_GetRetCount(f); const void *args[12];
+  uint64_t values[12]; const char *name=m3_GetFunctionName(f);
   if(n>12||r>1) return "Invalid filesystem signature";
-  for(uint32_t i=0;i<n;i++)args[i]=&_sp[r+i];
-  CHECK(m3_Call(f,n,args)); if(r){const void *ret[]={&_sp[0]}; CHECK(m3_GetResults(f,1,ret));} return NULL;
+  for(uint32_t i=0;i<n;i++){values[i]=_sp[r+i];args[i]=&values[i];}
+  if(strncmp(name,"fd_",3)==0&&n) { uint32_t fd=(uint32_t)values[0]; if(fd>=1024||e->fd_map[fd]==UINT32_MAX){_sp[0]=8;return NULL;} values[0]=e->fd_map[fd]; }
+  CHECK(m3_Call(f,n,args)); if(r){_sp[0]=0;const void *ret[]={&_sp[0]}; CHECK(m3_GetResults(f,1,ret));}
+  if(_sp[0]==0 && strcmp(name,"path_open")==0) {
+    uint8_t *at=memory(e->appmod,(uint32_t)values[n-1],4);if(!at)return "Invalid opened descriptor";uint32_t fd=get32(at);if(fd<1024)e->fd_map[fd]=fd;
+  }
+  if(_sp[0]==0 && strcmp(name,"fd_close")==0) { uint32_t fd=(uint32_t)_sp[r];if(fd<1024)e->fd_map[fd]=UINT32_MAX; }
+  return NULL;
+}
+m3ApiRawFunction(fd_renumber) {
+  m3ApiReturnType(uint32_t); m3ApiGetArg(uint32_t,from); m3ApiGetArg(uint32_t,to);
+  Engine *e=m3_GetUserData(runtime);if(from>=1024||to>=1024||e->fd_map[from]==UINT32_MAX)m3ApiReturn(8);
+  if(from!=to){
+    if(e->fd_map[to]>=3&&e->fd_map[to]!=UINT32_MAX){uint64_t a[]={e->fd_map[to]};uint32_t ignored;CHECK(invoke(e->fsrt,"fd_close",1,a,&ignored));}
+    e->fd_map[to]=e->fd_map[from];e->fd_map[from]=UINT32_MAX;
+  }m3ApiReturn(0);
 }
 m3ApiRawFunction(proc_exit) { m3ApiGetArg(uint32_t,code); Engine *e=m3_GetUserData(runtime); e->exit_code=(int)code; return EXIT_TRAP; }
 m3ApiRawFunction(args_sizes) {
@@ -208,6 +225,7 @@ static const char *link_optional(IM3Module m,const char *name,const char *sig,M3
 }
 static const char *execute(Engine *e,uint8_t *bytes,size_t n,const char **argv,int argc,size_t limit) {
   e->argv=argv;e->argc=argc;e->exit_code=0;
+  for(uint32_t i=0;i<1024;i++)e->fd_map[i]=i;
   CHECK(load_module(e,&e->apprt,&e->appmod,bytes,n,limit));
   const char *names[]={"fd_allocate","fd_close","fd_fdstat_get","fd_fdstat_set_flags","fd_filestat_get","fd_filestat_set_size","fd_pread","fd_prestat_dir_name","fd_prestat_get","fd_read","fd_readdir","fd_seek","fd_write","path_create_directory","path_filestat_get","path_open","path_readlink","path_remove_directory","path_rename","path_symlink","path_unlink_file"};
   for(size_t i=0;i<sizeof(names)/sizeof(names[0]);i++) {
@@ -218,11 +236,13 @@ static const char *execute(Engine *e,uint8_t *bytes,size_t n,const char **argv,i
     if(r && r!=m3Err_functionLookupFailed)return r;
   }
   CHECK(link_optional(e->appmod,"proc_exit","v(i)",proc_exit));
+  CHECK(link_optional(e->appmod,"fd_renumber","i(ii)",fd_renumber));
   CHECK(link_optional(e->appmod,"args_sizes_get","i(ii)",args_sizes));CHECK(link_optional(e->appmod,"args_get","i(ii)",args_get));
   CHECK(link_optional(e->appmod,"environ_sizes_get","i(ii)",env_sizes));CHECK(link_optional(e->appmod,"environ_get","i(ii)",env_get));
   CHECK(link_optional(e->appmod,"clock_time_get","i(iIi)",clock_get));CHECK(link_optional(e->appmod,"random_get","i(ii)",random_get));
   CHECK(link_optional(e->appmod,"poll_oneoff","i(iiii)",not_supported));
   const char *r=invoke(e->apprt,"_start",0,NULL,NULL); if(r==EXIT_TRAP)r=NULL;
+  if(r) { M3ErrorInfo info={0}; m3_GetErrorInfo(e->apprt,&info); if(info.message && *info.message) { snprintf(e->error_detail,sizeof(e->error_detail),"%s: %s",r,info.message); r=e->error_detail; } }
   m3_FreeRuntime(e->apprt);e->apprt=NULL;e->appmod=NULL;return r;
 }
 static int safe_path(const char *p) {
