@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PocketMinGW</string>
+    <string name="title_activity_main">PocketMinGW</string>
+    <string name="package_name">com.pocketmingw.ide</string>
+    <string name="custom_url_scheme">com.pocketmingw.ide</string>
+</resources>

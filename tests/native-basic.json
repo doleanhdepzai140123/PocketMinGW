@@ -1,0 +1,1 @@
+{"files":[{"path":"main.cpp","content":"#include <bits/stdc++.h>\nusing namespace std;\nint main(){vector<int> a={3,1,2};sort(a.begin(),a.end());auto [x,y]=pair<int,int>{8,12};optional<int> z=gcd(x,y);for(int v:a) cout<<v;cout<<' '<<*z<<'\\n';}\n"}],"stdin":"","timeLimitMs":3000}
