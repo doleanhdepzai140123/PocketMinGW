@@ -4,6 +4,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Build target
+        type: choice
+        default: all
+        options: [all, android, ios, verify]
 permissions:
   contents: read
 concurrency:
@@ -11,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'verify'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -31,6 +38,7 @@ jobs:
           name: native-test-results
           path: artifacts/native-tests
   android:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'android'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -60,7 +68,7 @@ jobs:
           arch: x86_64
           ram-size: 4096M
           disable-animations: true
-          script: cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon && mkdir -p ../artifacts && adb shell am start -n com.pocketmingw.ide/.MainActivity && sleep 3 && adb shell screencap -p /sdcard/pocketmingw.png && adb pull /sdcard/pocketmingw.png ../artifacts/android-screen.png
+          script: cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon && mkdir -p ../artifacts && adb install -r app/build/outputs/apk/debug/app-debug.apk && adb shell am start -W -n com.pocketmingw.ide/.MainActivity && sleep 3 && adb shell screencap -p /sdcard/pocketmingw.png && adb pull /sdcard/pocketmingw.png ../artifacts/android-screen.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -73,6 +81,7 @@ jobs:
           name: PocketMinGW-Android12-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
   ios:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'ios'
     runs-on: macos-15
     timeout-minutes: 35
     steps:
