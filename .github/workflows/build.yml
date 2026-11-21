@@ -60,12 +60,7 @@ jobs:
           arch: x86_64
           ram-size: 4096M
           disable-animations: true
-          script: |
-            cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon
-            adb shell am start -n com.pocketmingw.ide/.MainActivity
-            sleep 3
-            adb shell screencap -p /sdcard/pocketmingw.png
-            adb pull /sdcard/pocketmingw.png ../artifacts/android-screen.png
+          script: cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon && mkdir -p ../artifacts && adb shell am start -n com.pocketmingw.ide/.MainActivity && sleep 3 && adb shell screencap -p /sdcard/pocketmingw.png && adb pull /sdcard/pocketmingw.png ../artifacts/android-screen.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
