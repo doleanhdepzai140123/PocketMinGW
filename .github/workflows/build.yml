@@ -60,12 +60,19 @@ jobs:
           arch: x86_64
           ram-size: 4096M
           disable-animations: true
-          script: cd android && ./gradlew connectedDebugAndroidTest --no-daemon
+          script: |
+            cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon
+            adb shell am start -n com.pocketmingw.ide/.MainActivity
+            sleep 3
+            adb shell screencap -p /sdcard/pocketmingw.png
+            adb pull /sdcard/pocketmingw.png ../artifacts/android-screen.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Android12-test-report
-          path: android/app/build/reports/androidTests
+          path: |
+            android/app/build/reports/androidTests
+            artifacts/android-screen.png
       - uses: actions/upload-artifact@v4
         with:
           name: PocketMinGW-Android12-debug
@@ -97,4 +104,6 @@ jobs:
         if: always()
         with:
           name: iPhone-simulator-test
-          path: artifacts/ios-simulator-result.json
+          path: |
+            artifacts/ios-simulator-result.json
+            artifacts/ios-screen.png
