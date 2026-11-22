@@ -265,12 +265,19 @@ static const char *project_files(Engine *e,cJSON *request) {
     CHECK(add_file(e,p,data,n));}return NULL;
 }
 static const char *compile(Engine *e,const char *dir,cJSON *req,uint8_t **program,size_t *program_size) {
+  const char *entry=string(req,"entryFile","");
+  if(*entry) {
+    if(!safe_path(entry))return "Invalid entry file";
+    cJSON *item;int found=0;cJSON_ArrayForEach(item,cJSON_GetObjectItemCaseSensitive(req,"files"))if(strcmp(string(item,"path",""),entry)==0)found=1;
+    if(!found)return "Entry file not found in project";
+  }
   CHECK(untar(e,dir));CHECK(project_files(e,req));
   uint8_t *bits=NULL;size_t bits_size=0;CHECK(load_bytes(dir,"stdc++.h",&bits,&bits_size));
   const char *r=add_dir(e,"include/bits");if(!r)r=add_file(e,"include/bits/stdc++.h",bits,bits_size);free(bits);if(r)return r;
   CHECK(load_bytes(dir,"clang.wasm",&e->appbytes,&e->applen));
   cJSON *files=cJSON_GetObjectItemCaseSensitive(req,"files"),*f;int count=0;char objects[100][32];const char *objptrs[100];
   cJSON_ArrayForEach(f,files){const char *p=string(f,"path","");const char *ext=strrchr(p,'.');if(!ext||(strcmp(ext,".cpp")&&strcmp(ext,".cc")&&strcmp(ext,".cxx")))continue;
+    if(*entry&&strcmp(p,entry)!=0)continue;
     snprintf(objects[count],32,".pocket%d.o",count);objptrs[count]=objects[count];
     const char *args[]={"clang","-cc1","-emit-obj","-isysroot","/","-internal-isystem","/include/c++/v1","-internal-isystem","/include","-internal-isystem","/lib/clang/8.0.1/include","-I",".","-std=c++17","-O2","-Wall","-Wextra","-ferror-limit","8","-o",objects[count],"-x","c++",p};
     CHECK(execute(e,e->appbytes,e->applen,args,sizeof(args)/sizeof(args[0]),512*1024*1024));if(e->exit_code)return "Compilation failed";count++;

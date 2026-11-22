@@ -21,6 +21,8 @@ public class OfflineCompilerTest {
     @Test public void cpp17AndFileIOThroughNativeBridge() throws Exception {
         String code="#include <bits/stdc++.h>\nusing namespace std;int main(){freopen(\"BAI.INP\",\"r\",stdin);freopen(\"BAI.OUT\",\"w\",stdout);int a,b;cin>>a>>b;vector<int>v={b,a};sort(v.begin(),v.end());auto[x,y]=pair{v[0],v[1]};optional<int>s=x+y;cout<<*s<<\"\\n\";}";
         JSONObject request=new JSONObject().put("files",new JSONArray().put(new JSONObject().put("path","main.cpp").put("content",code))).put("stdin","20 22\n").put("inputFile","BAI.INP").put("outputFile","BAI.OUT").put("timeLimitMs",3000);
+        request.getJSONArray("files").put(new JSONObject().put("path","other-solution.cpp").put("content","int main(){return 99;}"));
+        request.put("entryFile","main.cpp");
         Probe probe=new Probe();
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
             // The callback belongs only to the instrumentation process, never production.

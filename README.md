@@ -16,11 +16,12 @@ An offline mobile C++17 workbench for HSG / competitive-programming practice. An
 - Stop, execution timeout, bounded output and guest linear memory. No host filesystem/network access for compiled code.
 - Hallmark Console design, 44px touch targets, phone bottom navigation, coding key row, keyboard viewport handling.
 
-## 0.1.1 fixes
+## 0.1.2 fixes
 
 - Fixed `memory allocation failed` on physical iPhones: disabled wasm3's automatic 1 TiB virtual guard arena. Both native builds use bounded heap allocation and explicit memory bounds checks. No JIT or extra entitlements are needed.
 - Locked the outer app shell against zoom/panning. Editors and file panels retain their own scrolling; editor text starts at 16px to avoid iOS focus zoom.
 - Workspace/project/test creation works on Android 12's original WebView, including versions without `crypto.randomUUID`.
+- HSG projects now run the active C++ file by default, so separate solutions can each have `main()`. Choose **Cả project** in settings for a program split across multiple source files. Existing source files are preserved.
 - Native keyboard resize has a single owner. The coding key row docks above the keyboard, navigation hides while typing, and a dismiss button restores the full view.
 - CI covers compiler execution under a 1 GiB virtual-address ceiling, out-of-bounds traps, and actual iPhone simulator keyboard open/close geometry. Physical-device retesting is still required for this correction.
 

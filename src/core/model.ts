@@ -3,6 +3,7 @@ export interface TestCase { id: string; name: string; input: string; expected: s
 export interface Project {
   id: string; name: string; files: SourceFile[]; tabs: string[]; active: string;
   stdin: string; tests: TestCase[]; inputFile: string; outputFile: string; timeLimitMs: number;
+  buildMode: 'active' | 'project';
 }
 export interface Workspace { version: 1; projects: Project[]; activeProject: string; fontSize: number; wrap: boolean }
 export interface RunResult { buildLog: string; stdout: string; error: string; exitCode: number; phase: string; runMs: number; compileMs: number; files?: Record<string,string>; engine: string }
@@ -49,6 +50,7 @@ export function validateWorkspace(value: unknown): Workspace {
     p.inputFile = typeof p.inputFile === 'string' ? p.inputFile : '';
     p.outputFile = typeof p.outputFile === 'string' ? p.outputFile : '';
     p.timeLimitMs = Math.min(30000, Math.max(100, Number(p.timeLimitMs) || 3000));
+    p.buildMode = p.buildMode === 'project' ? 'project' : 'active';
   }
   if (!w.projects.some(p => p.id === w.activeProject)) w.activeProject = w.projects[0]?.id ?? '';
   w.fontSize = Math.min(24, Math.max(16, Number(w.fontSize) || 16)); w.wrap = Boolean(w.wrap);

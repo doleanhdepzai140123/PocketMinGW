@@ -73,3 +73,16 @@ test('fixed phone shell and keyboard layout at narrow widths', async ({page}) =>
     await expect(page.locator('.bottom-nav')).toBeVisible();
   }
 });
+
+test('HSG build mode defaults to active file and persists project mode', async ({page}) => {
+  await page.goto('/');
+  await page.getByRole('button', {name:'Thiết lập',exact:true}).click();
+  await expect(page.getByRole('combobox',{name:'Biên dịch',exact:true})).toHaveValue('active');
+  await page.getByRole('combobox',{name:'Biên dịch',exact:true}).selectOption('project');
+  await page.getByRole('button', {name:'Lưu tất cả'}).click();
+  await page.reload();
+  await expect(page.getByRole('combobox',{name:'Biên dịch',exact:true})).toHaveValue('project');
+  await page.getByRole('combobox',{name:'Biên dịch',exact:true}).selectOption('active');
+  await page.getByRole('button', {name:'Kết quả',exact:true}).click();
+  await expect(page.getByText('Chạy file main.cpp.',{exact:false})).toBeVisible();
+});
