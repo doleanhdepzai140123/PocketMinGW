@@ -80,6 +80,7 @@ test('HSG build mode defaults to active file and persists project mode', async (
   await expect(page.getByRole('combobox',{name:'Biên dịch',exact:true})).toHaveValue('active');
   await page.getByRole('combobox',{name:'Biên dịch',exact:true}).selectOption('project');
   await page.getByRole('button', {name:'Lưu tất cả'}).click();
+  await expect(page.getByText('Đã lưu trên máy')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('combobox',{name:'Biên dịch',exact:true})).toHaveValue('project');
   await page.getByRole('combobox',{name:'Biên dịch',exact:true}).selectOption('active');
