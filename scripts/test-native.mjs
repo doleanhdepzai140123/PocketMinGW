@@ -12,6 +12,7 @@ const tests = [
   ['multi-file',project('#include <iostream>\n#include "math.h"\nint main(){std::cout<<sum(20,22);}',{files:[{path:'main.cpp',content:'#include <iostream>\n#include "math.h"\nint main(){std::cout<<sum(20,22);}'},{path:'math.h',content:'int sum(int,int);'},{path:'math.cpp',content:'#include "math.h"\nint sum(int a,int b){return a+b;}'}]}),r=>{assert.equal(r.error,'');assert.equal(r.stdout,'42');}],
   ['compile-error',project('int main() { broken syntax; }'),r=>{assert.match(r.error,/Compilation/);assert.match(r.buildLog,/main.cpp:1:/);assert.equal(r.phase,'compile');}],
   ['time-limit',project('int main(){volatile int x=0;for(;;){x++;}}',{timeLimitMs:100}),r=>{assert.match(r.error,/Time limit/);assert.equal(r.phase,'run');assert.ok(r.runMs<5000);}],
+  ['memory-bounds',project('int main(){volatile int *p=(int*)0x7ffffffc;*p=42;}'),r=>{assert.match(r.error,/out of bounds memory/i);assert.equal(r.phase,'run');}],
   ['path-boundary',project('',{files:[{path:'../outside.cpp',content:'int main(){}'}]}),r=>assert.match(r.error,/Invalid project path/)],
 ];
 await mkdir('artifacts/native-tests',{recursive:true});

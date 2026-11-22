@@ -40,3 +40,28 @@ test('reject path traversal and explain browser execution limit',async({page})=>
   await page.getByRole('button',{name:'Chạy',exact:true}).click();
   await expect(page.getByText('Bản xem trước chỉ hỗ trợ soạn thảo.',{exact:false})).toBeVisible();
 });
+
+test('fixed phone shell and keyboard layout at narrow widths', async ({page}) => {
+  for (const width of [320, 375, 430]) {
+    await page.setViewportSize({width, height:812});
+    await page.goto('/');
+    await page.getByRole('textbox', {name:'Mã nguồn C++'}).fill('// ' + 'long source line '.repeat(100));
+    const shell = () => page.evaluate(() => ({
+      width: document.documentElement.scrollWidth, x: scrollX, y: scrollY,
+      header: document.querySelector('.topbar')!.getBoundingClientRect().top,
+      font: parseFloat(getComputedStyle(document.querySelector('.cm-content')!).fontSize),
+    }));
+    expect(await shell()).toEqual({width, x:0, y:0, header:0, font:16});
+    // CSS contract only; the simulator test exercises real native keyboard events.
+    await page.evaluate(() => { document.documentElement.dataset.keyboard = 'open'; });
+    await page.setViewportSize({width, height:440});
+    await expect(page.locator('.bottom-nav')).toBeHidden();
+    await expect(page.getByRole('button', {name:'Ẩn bàn phím'})).toBeVisible();
+    await expect.poll(() => page.locator('.coding-keys').evaluate(e => e.getBoundingClientRect().bottom)).toBe(440);
+    expect(await shell()).toEqual({width, x:0, y:0, header:0, font:16});
+    await page.getByRole('button', {name:'Ẩn bàn phím'}).click();
+    await page.evaluate(() => { document.documentElement.dataset.keyboard = 'closed'; });
+    await page.setViewportSize({width, height:812});
+    await expect(page.locator('.bottom-nav')).toBeVisible();
+  }
+});

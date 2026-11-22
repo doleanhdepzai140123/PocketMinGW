@@ -2,6 +2,10 @@
 // host filesystem imports, sockets, or dynamic code loading are exposed to guests.
 #include "pocket.h"
 #include "wasm3.h"
+#include "m3_config.h"
+#if d_m3GuardedMemory || d_m3SkipMemoryBoundsCheck
+#error PocketMinGW requires software bounds checks and bounded address-space allocation
+#endif
 #include "cJSON.h"
 #include <stdio.h>
 #include <stdlib.h>

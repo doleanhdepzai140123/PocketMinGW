@@ -85,3 +85,28 @@ dialog { position: fixed; inset: 0; margin: auto; height: fit-content; max-heigh
 }
 @media (max-height: 520px) and (max-width: 760px) { .bottom-nav { display: none; }.editor-status { display: none; }.project-bar { display: none; }.notice { display: none; }.topbar { min-height: 48px; padding-block: 0; }.editor-tools { display: none; } }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* A fixed app shell; only the editor and each content panel own scrolling. */
+html, body, #root { width: 100%; height: 100%; overflow: clip; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { position: fixed; inset: 0; margin: 0; }
+.workspace { width: 100%; overflow: hidden; }
+.brand { min-width: 0; }
+.brand h1 { overflow: hidden; text-overflow: ellipsis; }
+.work-area, .editor-region, .source-panel, .coding-keys { min-width: 0; }
+.cm-editor.cm-focused { outline: none; }
+.cm-editor .cm-content:focus-visible { outline: 1px solid var(--color-rule-2); outline-offset: -1px; }
+.keyboard-dismiss { display: none; }
+[data-keyboard=open] .keyboard-dismiss { display: inline-flex; }
+[data-keyboard=open] .top-actions > .icon-button:not(.keyboard-dismiss) { display: none; }
+@media (max-width: 760px) {
+  input, select, textarea, .file-search input, .project-select select, .cm-editor .cm-textfield { font-size: 16px; }
+  .code-editor { min-width: 0; font-size: max(16px, var(--editor-font-size, 16px)); }
+  [data-keyboard=open] .bottom-nav, [data-keyboard=open] .editor-status, [data-keyboard=open] .project-bar { display: none; }
+  [data-keyboard=open] .coding-keys { padding-bottom: var(--space-2xs); }
+  [data-keyboard=open] .notice { display: none; }
+  [data-keyboard=open] .topbar { min-height: 60px; padding-top: max(var(--space-xs), env(safe-area-inset-top)); padding-bottom: var(--space-xs); }
+  [data-keyboard=open] .editor-tools { display: flex; }
+  dialog { max-height: calc(var(--viewport-height) - 24px); overflow-y: auto; }
+}
+@media (max-width: 350px) { .brand h1 { font-size: 16px; } .brand img { width: 24px; height: 24px; } }

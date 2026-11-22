@@ -32,6 +32,10 @@ jobs:
       - run: npx playwright install --with-deps chrome && npm run test:e2e
       - run: cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release && cmake --build native/build -j 4
       - run: node scripts/test-native.mjs
+      - name: Compile under a 1 GiB process address-space ceiling
+        run: |
+          prlimit --as=1073741824 native/build/pocket-cli public/toolchain tests/native-basic.json > artifacts/native-tests/bounded-address-space.result.json
+          node -e 'const r=require("./artifacts/native-tests/bounded-address-space.result.json"); console.log(r); if(r.error || r.exitCode !== 0 || r.stdout !== "123 4\n") process.exit(1)'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -111,3 +115,6 @@ jobs:
           path: |
             artifacts/ios-simulator-result.json
             artifacts/ios-screen.png
+            artifacts/ios-keyboard*.json
+            artifacts/ios-keyboard.png
+            artifacts/ios-simulator-build.log

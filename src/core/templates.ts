@@ -8,4 +8,4 @@ export function newProject(name: string, template = 'C++17 cơ bản'): Project 
   const isFile = template === 'Đọc / ghi file';
   return { id: crypto.randomUUID(), name, files: [{ path: 'main.cpp', content: templates[template] ?? templates['C++17 cơ bản'] }], tabs: ['main.cpp'], active: 'main.cpp', stdin: isFile ? '12 30\n' : '5\n1 2 3 4 5\n', tests: [{ id: crypto.randomUUID(), name: 'Ví dụ 1', input: isFile ? '12 30\n' : '5\n1 2 3 4 5\n', expected: isFile ? '42\n' : '15\n' }], inputFile: isFile ? 'BAI.INP' : '', outputFile: isFile ? 'BAI.OUT' : '', timeLimitMs: 3000 };
 }
-export function initialWorkspace(): Workspace { const p = newProject('Tổng dãy số'); return { version: 1, projects: [p], activeProject: p.id, fontSize: 15, wrap: false }; }
+export function initialWorkspace(): Workspace { const p = newProject('Tổng dãy số'); return { version: 1, projects: [p], activeProject: p.id, fontSize: 16, wrap: false }; }

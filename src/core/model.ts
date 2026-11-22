@@ -48,6 +48,6 @@ export function validateWorkspace(value: unknown): Workspace {
     p.timeLimitMs = Math.min(30000, Math.max(100, Number(p.timeLimitMs) || 3000));
   }
   if (!w.projects.some(p => p.id === w.activeProject)) w.activeProject = w.projects[0]?.id ?? '';
-  w.fontSize = Math.min(24, Math.max(12, Number(w.fontSize) || 15)); w.wrap = Boolean(w.wrap);
+  w.fontSize = Math.min(24, Math.max(16, Number(w.fontSize) || 16)); w.wrap = Boolean(w.wrap);
   return w;
 }

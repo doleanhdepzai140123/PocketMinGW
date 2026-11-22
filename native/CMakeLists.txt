@@ -4,6 +4,9 @@ set(CMAKE_C_STANDARD 11)
 set(BUILD_WASI none)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(vendor/wasm3/source)
+# Mobile processes cannot reserve wasm3's default 128 x 8 GiB guard arena.
+# Keep explicit bounds checks and allocate only the memory each guest needs.
+target_compile_definitions(m3 PUBLIC d_m3GuardedMemory=0 d_m3SkipMemoryBoundsCheck=0)
 # prepare-toolchain patches the default yield to call pocket_yield.
 add_library(pocket STATIC pocket.c vendor/cjson/cJSON.c)
 target_include_directories(pocket PUBLIC . vendor/cjson vendor/wasm3/source)

@@ -62,5 +62,5 @@ export const CodeEditor = forwardRef<EditorHandle, Props>((props, ref) => {
     undo() { if(view.current)undo(view.current); }, redo() { if(view.current)redo(view.current); }, search() { if(view.current)openSearchPanel(view.current); },
     goto(line,column) { const v=view.current;if(!v)return;const l=v.state.doc.line(Math.max(1,Math.min(v.state.doc.lines,line)));v.dispatch({selection:{anchor:Math.min(l.to,l.from+Math.max(0,column-1))},scrollIntoView:true});v.focus(); },
   }), []);
-  return <div ref={host} className="code-editor" style={{ fontSize: props.fontSize }} />;
+  return <div ref={host} className="code-editor" style={{ fontSize: Math.max(16, props.fontSize) }} />;
 });
