@@ -29,8 +29,15 @@ public class OfflineCompilerTest {
             // Wait for the bundled document; evaluateJavascript before navigation is discarded.
             for(int i=0;i<100;i++) {
                 final CountDownLatch checked=new CountDownLatch(1); final boolean[] ready={false};
-                scenario.onActivity(activity->activity.getBridge().getWebView().evaluateJavascript("document.readyState==='complete' && !!window.Capacitor && !!window.PocketTestProbe",value->{ready[0]="true".equals(value);checked.countDown();}));
-                assertTrue(checked.await(5,TimeUnit.SECONDS)); if(ready[0])break; if(i==99)fail("App WebView did not start"); Thread.sleep(100);
+                scenario.onActivity(activity->activity.getBridge().getWebView().evaluateJavascript("document.readyState==='complete' && !!window.Capacitor && !!window.PocketTestProbe && !!document.querySelector('.workspace .cm-content')",value->{ready[0]="true".equals(value);checked.countDown();}));
+                assertTrue(checked.await(5,TimeUnit.SECONDS)); if(ready[0])break; if(i==99)fail("App editor did not start on the device WebView"); Thread.sleep(100);
+            }
+            // Run the default sum example through the actual app button as well as the bridge.
+            scenario.onActivity(activity->activity.getBridge().getWebView().evaluateJavascript("document.querySelector('.run-button').click()",null));
+            for(int i=0;i<240;i++) {
+                final CountDownLatch checked=new CountDownLatch(1); final boolean[] passed={false};
+                scenario.onActivity(activity->activity.getBridge().getWebView().evaluateJavascript("document.querySelector('.terminal-output')?.textContent.trim()==='15' && !document.querySelector('.running-message')",value->{passed[0]="true".equals(value);checked.countDown();}));
+                assertTrue(checked.await(5,TimeUnit.SECONDS)); if(passed[0])break; if(i==239)fail("Run button did not produce 15 in the app"); Thread.sleep(1000);
             }
             scenario.onActivity(activity->activity.getBridge().getWebView().evaluateJavascript(js,null));
             assertTrue("Native compiler timed out",probe.done.await(240,TimeUnit.SECONDS));

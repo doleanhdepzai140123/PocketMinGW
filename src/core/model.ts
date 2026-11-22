@@ -7,6 +7,9 @@ export interface Project {
 export interface Workspace { version: 1; projects: Project[]; activeProject: string; fontSize: number; wrap: boolean }
 export interface RunResult { buildLog: string; stdout: string; error: string; exitCode: number; phase: string; runMs: number; compileMs: number; files?: Record<string,string>; engine: string }
 export interface Diagnostic { file: string; line: number; column: number; message: string; severity: string }
+export function cloneProject(p: Project): Project {
+  return { ...p, files: p.files.map(f => ({ ...f })), tabs: [...p.tabs], tests: p.tests.map(t => ({ ...t })) };
+}
 export function validPath(path: string): string {
   const clean = path.trim();
   if (!clean || clean.length > 200 || /[\\:\x00-\x1f]/.test(clean) || clean.split('/').some(p => !p || p === '.' || p === '..')) throw new Error('Tên file không hợp lệ. Dùng đường dẫn như src/main.cpp.');

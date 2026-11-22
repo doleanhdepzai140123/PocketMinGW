@@ -1,4 +1,12 @@
 import { test, expect } from '@playwright/test';
+test.beforeEach(async ({page}) => {
+  // Exercise the APIs missing from Android 12's factory WebView in every user flow.
+  await page.addInitScript(() => {
+    Object.defineProperty(crypto, 'randomUUID', {value: undefined});
+    Object.defineProperty(window, 'structuredClone', {value: undefined});
+    Object.defineProperty(Object, 'hasOwn', {value: undefined});
+  });
+});
 test('phone editing, tabs, persistence, project isolation and test bench', async ({page}) => {
   await page.goto('/');
   await expect(page.getByRole('heading',{name:'PocketMinGW'})).toBeVisible();
