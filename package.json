@@ -1,6 +1,6 @@
 {
   "name": "pocketmingw",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "toolchain": "node scripts/prepare-toolchain.mjs",
     "sync": "npm run build && cap sync && node scripts/configure-native.mjs",
     "check": "npm run test && npm run build",
+    "pch": "node scripts/prepare-pch.mjs",
     "icons": "node scripts/prepare-icons.mjs"
   },
   "dependencies": {

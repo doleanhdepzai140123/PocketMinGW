@@ -110,3 +110,12 @@ body { position: fixed; inset: 0; margin: 0; }
   dialog { max-height: calc(var(--viewport-height) - 24px); overflow-y: auto; }
 }
 @media (max-width: 350px) { .brand h1 { font-size: 16px; } .brand img { width: 24px; height: 24px; } }
+
+/* File actions remain visible on touch screens, without nested buttons. */
+.file-item { display: flex; min-width: 0; align-items: center; }
+.file-item .file-row { flex: 1; min-width: 0; }
+.file-item > .icon-button { flex: 0 0 44px; }
+.delete-project { color: var(--color-error); }
+.delete-name { overflow-wrap: anywhere; font-weight: 600; }
+
+@media (max-width: 760px) { .explorer-actions button { gap: var(--space-2xs); font-size: 14px; white-space: nowrap; } .explorer-actions svg { flex-shrink: 0; } }

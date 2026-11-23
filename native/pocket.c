@@ -28,6 +28,7 @@ typedef struct {
   IM3Module fsmod, appmod;
   uint8_t *fsbytes, *appbytes;
   size_t fslen, applen;
+  int pch_used;
   const char **argv; int argc, exit_code;
   const char *input; size_t input_pos, input_len;
   char *output; size_t output_len;
@@ -98,7 +99,11 @@ static const char *add_file(Engine *e,const char *path,const void *data,size_t s
 }
 static const char *read_file(Engine *e,const char *path,uint8_t **data,size_t *size) {
   uint32_t n,inode,at,len; CHECK(pathbuf(e,path,&n)); uint64_t args[]={n};
-  CHECK(invoke(e->fsrt,"FindNode",1,args,&inode)); if(inode==0 || inode==UINT32_MAX) return "File not found";
+  // The pinned memfs FindNode asserts lookup.node instead of returning ENOENT.
+  // Translate only that lookup trap; errors reading an existing node still fail.
+  const char *lookup=invoke(e->fsrt,"FindNode",1,args,&inode);
+  if(lookup&&!strcmp(lookup,"[trap] unreachable"))return "File not found";
+  if(lookup)return lookup;if(inode==0 || inode==UINT32_MAX) return "File not found";
   uint64_t node[]={inode}; CHECK(invoke(e->fsrt,"GetFileNodeAddress",1,node,&at));
   CHECK(invoke(e->fsrt,"GetFileNodeSize",1,node,&len));
   uint8_t *p=memory(e->fsmod,at,len); if(!p) return "Invalid file result";
@@ -256,13 +261,38 @@ static int safe_path(const char *p) {
 }
 static const char *string(cJSON *o,const char *key,const char *fallback) {cJSON *v=cJSON_GetObjectItemCaseSensitive(o,key);return cJSON_IsString(v)?v->valuestring:fallback;}
 static int number(cJSON *o,const char *key,int fallback,int low,int high){cJSON *v=cJSON_GetObjectItemCaseSensitive(o,key);int n=cJSON_IsNumber(v)?v->valueint:fallback;return n<low?low:n>high?high:n;}
-static const char *project_files(Engine *e,cJSON *request) {
+static const char *project_files(Engine *e,cJSON *request,const char *omit) {
   cJSON *files=cJSON_GetObjectItemCaseSensitive(request,"files"),*f; if(!cJSON_IsArray(files)||cJSON_GetArraySize(files)>100)return "Expected at most 100 project files";
   size_t total=0;cJSON_ArrayForEach(f,files){const char *p=string(f,"path",""),*data=string(f,"content","");
     if(!safe_path(p))return "Invalid project path";if(strncmp(p,"include/",8)==0||strncmp(p,"lib/",4)==0||strncmp(p,".pocket",7)==0)return "Reserved runtime path";
     size_t n=strlen(data);total+=n;if(n>FILE_LIMIT||total>10*FILE_LIMIT)return "Project file limit exceeded";
     char dir[256];strcpy(dir,p);for(char *c=dir;*c;c++)if(*c=='/'){*c=0;CHECK(add_dir(e,dir));*c='/';}
-    CHECK(add_file(e,p,data,n));}return NULL;
+    if(!omit||strcmp(p,omit))CHECK(add_file(e,p,data,n));}return NULL;
+}
+// Shared options keep the bundled PCH and normal compilation compatible.
+#define CLANG_COMMON "-isysroot","/","-internal-isystem","/include/c++/v1","-internal-isystem","/include","-internal-isystem","/lib/clang/8.0.1/include","-I",".","-std=c++17","-O2","-Wall","-Wextra","-ferror-limit","8"
+static const char *install_headers(Engine *e,const char *dir) {
+  CHECK(untar(e,dir));
+  uint8_t *bits=NULL;size_t bits_size=0;CHECK(load_bytes(dir,"stdc++.h",&bits,&bits_size));
+  const char *r=add_dir(e,"include/bits");if(!r)r=add_file(e,"include/bits/stdc++.h",bits,bits_size);free(bits);if(r)return r;
+  return NULL;
+}
+// Only inject a PCH when bits/stdc++.h is the very first source directive.
+// Macro customizations/preambles retain the normal preprocessing path.
+static int starts_with_bits(const char *source) {
+  source+=strspn(source," \r\n\t");
+  const char *forms[]={"#include <bits/stdc++.h>","#include<bits/stdc++.h>"};
+  for(int i=0;i<2;i++){size_t n=strlen(forms[i]);if(!strncmp(source,forms[i],n)){
+    const char *tail=source+n;tail+=strspn(tail," \t\r");if(!*tail||*tail=='\n')return 1;}}
+  return 0;
+}
+static int pch_project_safe(cJSON *req) {
+  // A project can shadow standard headers via -I. Fall back conservatively
+  // for .h/extensionless/custom files rather than change preprocessing semantics.
+  cJSON *f;cJSON_ArrayForEach(f,cJSON_GetObjectItemCaseSensitive(req,"files")){
+    const char *ext=strrchr(string(f,"path",""),'.');
+    if(!ext||(strcmp(ext,".cpp")&&strcmp(ext,".cc")&&strcmp(ext,".cxx")&&strcmp(ext,".hpp")&&strcmp(ext,".INP")&&strcmp(ext,".OUT")&&strcmp(ext,".inp")&&strcmp(ext,".out")&&strcmp(ext,".txt")))return 0;
+  }return 1;
 }
 static const char *compile(Engine *e,const char *dir,cJSON *req,uint8_t **program,size_t *program_size) {
   const char *entry=string(req,"entryFile","");
@@ -271,16 +301,22 @@ static const char *compile(Engine *e,const char *dir,cJSON *req,uint8_t **progra
     cJSON *item;int found=0;cJSON_ArrayForEach(item,cJSON_GetObjectItemCaseSensitive(req,"files"))if(strcmp(string(item,"path",""),entry)==0)found=1;
     if(!found)return "Entry file not found in project";
   }
-  CHECK(untar(e,dir));CHECK(project_files(e,req));
-  uint8_t *bits=NULL;size_t bits_size=0;CHECK(load_bytes(dir,"stdc++.h",&bits,&bits_size));
-  const char *r=add_dir(e,"include/bits");if(!r)r=add_file(e,"include/bits/stdc++.h",bits,bits_size);free(bits);if(r)return r;
+  CHECK(install_headers(e,dir));CHECK(project_files(e,req,string(req,"outputFile","")));
   CHECK(load_bytes(dir,"clang.wasm",&e->appbytes,&e->applen));
   cJSON *files=cJSON_GetObjectItemCaseSensitive(req,"files"),*f;int count=0;char objects[100][32];const char *objptrs[100];
   cJSON_ArrayForEach(f,files){const char *p=string(f,"path","");const char *ext=strrchr(p,'.');if(!ext||(strcmp(ext,".cpp")&&strcmp(ext,".cc")&&strcmp(ext,".cxx")))continue;
     if(*entry&&strcmp(p,entry)!=0)continue;
     snprintf(objects[count],32,".pocket%d.o",count);objptrs[count]=objects[count];
-    const char *args[]={"clang","-cc1","-emit-obj","-isysroot","/","-internal-isystem","/include/c++/v1","-internal-isystem","/include","-internal-isystem","/lib/clang/8.0.1/include","-I",".","-std=c++17","-O2","-Wall","-Wextra","-ferror-limit","8","-o",objects[count],"-x","c++",p};
-    CHECK(execute(e,e->appbytes,e->applen,args,sizeof(args)/sizeof(args[0]),512*1024*1024));if(e->exit_code)return "Compilation failed";count++;
+    const char *base[]={"clang","-cc1","-emit-obj",CLANG_COMMON,"-o",objects[count],"-x","c++",p};
+    const char *args[40];int argn=sizeof(base)/sizeof(base[0]);for(int a=0;a<argn;a++)args[a]=base[a];
+    if(pch_project_safe(req)&&starts_with_bits(string(f,"content",""))){
+      uint8_t *pch=NULL;size_t pch_size=0;
+      if(!load_bytes(dir,"stdc++.pch",&pch,&pch_size)){
+        const char *install=add_file(e,".pocket-stdc++.pch",pch,pch_size);free(pch);if(install)return install;
+        args[argn++]="-include-pch";args[argn++]=".pocket-stdc++.pch";e->pch_used=1;
+      }
+    }
+    CHECK(execute(e,e->appbytes,e->applen,args,argn,512*1024*1024));if(e->exit_code)return "Compilation failed";count++;
   }free(e->appbytes);e->appbytes=NULL;if(!count)return "Project has no C++ source file";
   CHECK(load_bytes(dir,"lld.wasm",&e->appbytes,&e->applen));
   const char *args[128]={"wasm-ld","--no-threads","-z","stack-size=4194304","--max-memory=134217728","-Llib/wasm32-wasi","lib/wasm32-wasi/crt1.o"};int argc=7;
@@ -292,22 +328,77 @@ static void cleanup(Engine *e) {
   if(e->apprt)m3_FreeRuntime(e->apprt);if(e->fsrt)m3_FreeRuntime(e->fsrt);if(e->env)m3_FreeEnvironment(e->env);
   free(e->appbytes);free(e->fsbytes);free(e->output);memset(e,0,sizeof(*e));
 }
+#ifdef POCKET_BUILD_TOOLS
+// Build hosts generate this with the same interpreted WASM compiler as the app.
+// Only the data artifact ships; this host-file writer is absent from mobile builds.
+int pocket_prepare_pch(const char *dir,const char *destination) {
+  Engine e={0};e.deadline=now_ms()+180000;active_engine=&e;e.input="";e.output=calloc(OUTPUT_LIMIT+1,1);
+  const char *err=e.output?init_fs(&e,dir):"Out of memory";
+  if(!err)err=install_headers(&e,dir);
+  if(!err)err=load_bytes(dir,"clang.wasm",&e.appbytes,&e.applen);
+  const char *args[]={"clang","-cc1","-emit-pch",CLANG_COMMON,"-fno-pch-timestamp","-o",".pocket-stdc++.pch","-x","c++-header","/include/bits/stdc++.h"};
+  if(!err)err=execute(&e,e.appbytes,e.applen,args,sizeof(args)/sizeof(args[0]),512*1024*1024);
+  if(!err&&e.exit_code)err="PCH compilation failed";
+  uint8_t *data=NULL;size_t size=0;if(!err)err=read_file(&e,".pocket-stdc++.pch",&data,&size);
+  if(!err){FILE *out=fopen(destination,"wb");if(!out)err="Cannot write PCH";else{if(fwrite(data,1,size,out)!=size)err="Incomplete PCH write";if(fclose(out))err="Cannot close PCH";}}
+  if(err)fprintf(stderr,"%s\n%s\n",err,e.output?e.output:"");else printf("Prepared PCH: %zu bytes\n",size);
+  free(data);cleanup(&e);active_engine=NULL;return err?1:0;
+}
+#endif
+// One bounded, process-local cache of WASM bytecode, never executable/JIT memory.
+// Exact keys include every compile input, entry and toolchain directory. The
+// configured OUT is a generated result, excluded from BOTH compiler FS and key.
+// Changing that filename changes the key. Run input/limits do not affect it.
+// Access is serialized by busy. A cache allocation failure only disables caching.
+static char *cached_key=NULL,*cached_log=NULL;
+static uint8_t *cached_program=NULL;
+static size_t cached_size=0;
+static char *compile_key(const char *dir,cJSON *req) {
+  cJSON *files=cJSON_GetObjectItemCaseSensitive(req,"files"),*f;
+  if(!cJSON_IsArray(files)||cJSON_GetArraySize(files)>100)return NULL;
+  size_t total=0;
+  cJSON_ArrayForEach(f,files){const char *s=string(f,"content","");total+=strlen(s);
+    if(total>10*FILE_LIMIT||strstr(s,"__TIME__")||strstr(s,"__DATE__")||strstr(s,"__TIMESTAMP__"))return NULL;}
+  cJSON *key=cJSON_CreateArray();cJSON_AddItemToArray(key,cJSON_CreateString(dir));
+  cJSON_AddItemToArray(key,cJSON_CreateString(string(req,"entryFile","")));
+  const char *out=string(req,"outputFile","");cJSON_AddItemToArray(key,cJSON_CreateString(out));
+  cJSON *inputs=cJSON_CreateArray();cJSON_AddItemToArray(key,inputs);
+  cJSON_ArrayForEach(f,files)if(strcmp(string(f,"path",""),out))cJSON_AddItemReferenceToArray(inputs,f);
+  char *text=cJSON_PrintUnformatted(key);cJSON_Delete(key);return text;
+}
+static void cache_program(char **key,const uint8_t *program,size_t size,const char *log) {
+  if(!*key||size>16*1024*1024)return;
+  uint8_t *copy=malloc(size);char *logs=malloc(strlen(log)+1);
+  if(!copy||!logs){free(copy);free(logs);return;}
+  memcpy(copy,program,size);strcpy(logs,log);
+  free(cached_key);free(cached_program);free(cached_log);
+  cached_key=*key;*key=NULL;cached_program=copy;cached_size=size;cached_log=logs;
+}
 char *pocket_run(const char *dir,const char *json) {
   if(atomic_exchange(&busy,1))return cJSON_PrintUnformatted(cJSON_CreateString("Runtime is busy"));
   atomic_store(&cancelled,0);Engine e={0};e.deadline=now_ms()+180000;active_engine=&e;e.input="";
   e.output=calloc(OUTPUT_LIMIT+1,1);cJSON *req=cJSON_Parse(json),*result=cJSON_CreateObject();
   const char *err=NULL,*phase="compile";uint8_t *program=NULL;size_t program_size=0;double start=now_ms(),run_start=0,run_ms=0;
   if(!req||!cJSON_IsObject(req))err="Invalid request";else if(!e.output)err="Out of memory";
-  if(!err)err=init_fs(&e,dir);if(!err)err=compile(&e,dir,req,&program,&program_size);
-  cJSON_AddStringToObject(result,"buildLog",e.output?e.output:"");cJSON_AddNumberToObject(result,"compileMs",now_ms()-start);
+  char *key=!err?compile_key(dir,req):NULL;int cache_hit=0;
+  if(!err&&key&&cached_key&&!strcmp(key,cached_key)){
+    program=malloc(cached_size);if(program){memcpy(program,cached_program,cached_size);program_size=cached_size;cache_hit=1;}
+  }
+  if(!err&&!cache_hit){if(!err)err=init_fs(&e,dir);if(!err)err=compile(&e,dir,req,&program,&program_size);
+    if(!err)cache_program(&key,program,program_size,e.output?e.output:"");}
+  free(key);
+  cJSON_AddBoolToObject(result,"cacheHit",cache_hit);
+  cJSON_AddBoolToObject(result,"precompiledHeaders",e.pch_used);
+  cJSON_AddStringToObject(result,"buildLog",cache_hit?cached_log:e.output?e.output:"");cJSON_AddNumberToObject(result,"compileMs",now_ms()-start);
   if(!err){
     // Destroy the compiler sandbox. Each program gets a fresh FS containing only its project.
     cleanup(&e);e.deadline=now_ms()+30000;e.output=calloc(OUTPUT_LIMIT+1,1);e.input=string(req,"stdin","");e.input_len=strlen(e.input);phase="run";
-    err=init_fs(&e,dir);if(!err)err=project_files(&e,req);
+    if(!e.output)err="Out of memory";
+    if(!err)err=init_fs(&e,dir);if(!err)err=project_files(&e,req,string(req,"outputFile",""));
     const char *input_file=string(req,"inputFile","");if(!err&&*input_file){if(!safe_path(input_file)||strchr(input_file,'/'))err="Invalid INP filename";else err=add_file(&e,input_file,e.input,e.input_len);}
     if(!err){const char *args[]={"program"};run_start=now_ms();e.deadline=run_start+number(req,"timeLimitMs",3000,100,30000);err=execute(&e,program,program_size,args,1,128*1024*1024);run_ms=now_ms()-run_start;}
     cJSON *outputs=cJSON_AddObjectToObject(result,"files");const char *out=string(req,"outputFile","");
-    if(!err&&*out){if(!safe_path(out)||strchr(out,'/'))err="Invalid OUT filename";else{uint8_t *data=NULL;size_t size=0;const char *readerr=read_file(&e,out,&data,&size);if(!readerr&&size<=FILE_LIMIT)cJSON_AddStringToObject(outputs,out,(char*)data);else if(!readerr)err="OUT file exceeds 2 MiB";else err="Configured OUT file was not created";free(data);}}
+    if(!err&&*out){if(!safe_path(out)||strchr(out,'/'))err="Invalid OUT filename";else{uint8_t *data=NULL;size_t size=0;const char *readerr=read_file(&e,out,&data,&size);if(!readerr&&size<=FILE_LIMIT)cJSON_AddStringToObject(outputs,out,(char*)data);else if(!readerr)err="OUT file exceeds 2 MiB";else if(!strcmp(readerr,"File not found"))cJSON_AddStringToObject(result,"outputNote","Không tạo file OUT; kết quả lấy từ stdout (cout/printf).");else err=readerr;free(data);}}
   }
   cJSON_AddStringToObject(result,"stdout",strcmp(phase,"run")==0&&e.output?e.output:"");
   cJSON_AddStringToObject(result,"phase",phase);cJSON_AddStringToObject(result,"error",err?err:"");

@@ -6,7 +6,7 @@ export interface Project {
   buildMode: 'active' | 'project';
 }
 export interface Workspace { version: 1; projects: Project[]; activeProject: string; fontSize: number; wrap: boolean }
-export interface RunResult { buildLog: string; stdout: string; error: string; exitCode: number; phase: string; runMs: number; compileMs: number; files?: Record<string,string>; engine: string }
+export interface RunResult { cacheHit?: boolean; outputNote?: string; buildLog: string; stdout: string; error: string; exitCode: number; phase: string; runMs: number; compileMs: number; files?: Record<string,string>; engine: string }
 export interface Diagnostic { file: string; line: number; column: number; message: string; severity: string }
 export function cloneProject(p: Project): Project {
   return { ...p, files: p.files.map(f => ({ ...f })), tabs: [...p.tabs], tests: p.tests.map(t => ({ ...t })) };

@@ -27,7 +27,7 @@ public class OfflineCompilerTest {
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
             // The callback belongs only to the instrumentation process, never production.
             scenario.onActivity(activity->{activity.getBridge().getWebView().addJavascriptInterface(probe,"PocketTestProbe");activity.getBridge().getWebView().reload();});
-            String js="(function wait(){if(!window.Capacitor||!window.Capacitor.nativePromise){setTimeout(wait,100);return;}window.Capacitor.nativePromise('PocketRuntime','run',{request:"+JSONObject.quote(request.toString())+"}).then(r=>PocketTestProbe.finish(r.result)).catch(e=>PocketTestProbe.finish(JSON.stringify({error:String(e)})));})()";
+            String js="(function wait(){if(!window.Capacitor||!window.Capacitor.nativePromise){setTimeout(wait,100);return;}window.Capacitor.nativePromise('PocketRuntime','run',{request:"+JSONObject.quote(request.toString())+"}).then(async r=>{const q=JSON.parse("+JSONObject.quote(request.toString())+");q.stdin='21 24\\n';const next=await window.Capacitor.nativePromise('PocketRuntime','run',{request:JSON.stringify(q)});const first=JSON.parse(r.result);first.cachedResult=JSON.parse(next.result);PocketTestProbe.finish(JSON.stringify(first));}).catch(e=>PocketTestProbe.finish(JSON.stringify({error:String(e)})));})()";
             // Wait for the bundled document; evaluateJavascript before navigation is discarded.
             for(int i=0;i<100;i++) {
                 final CountDownLatch checked=new CountDownLatch(1); final boolean[] ready={false};
@@ -48,6 +48,9 @@ public class OfflineCompilerTest {
             assertEquals(0,result.getInt("exitCode"));
             assertEquals("42\n",result.getJSONObject("files").getString("BAI.OUT"));
             assertTrue(result.getString("engine").contains("no JIT"));
+            assertTrue(result.getBoolean("precompiledHeaders"));
+            assertTrue(result.getJSONObject("cachedResult").getBoolean("cacheHit"));
+            assertEquals("45\n",result.getJSONObject("cachedResult").getJSONObject("files").getString("BAI.OUT"));
         }
     }
 }

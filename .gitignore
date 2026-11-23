@@ -27,3 +27,5 @@ xcuserdata/
 *.mobileprovision
 .env*
 !.env.example
+
+public/toolchain/stdc++.pch

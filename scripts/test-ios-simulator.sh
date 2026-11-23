@@ -12,7 +12,7 @@ for attempt in $(seq 1 240); do
   if [ -f "$container/Documents/PocketMinGW/simulator-result.json" ]; then
     cp "$container/Documents/PocketMinGW/simulator-result.json" artifacts/ios-simulator-result.json
     xcrun simctl io "$device" screenshot artifacts/ios-screen.png
-    node -e 'const r=require("./artifacts/ios-simulator-result.json");console.log(r);if(r.error||r.exitCode!==0||r.files?.["BAI.OUT"]!=="42\n")process.exit(1)'
+    node -e 'const r=require("./artifacts/ios-simulator-result.json");console.log(r);if(r.error||r.exitCode!==0||r.files?.["BAI.OUT"]!=="42\n"||!r.precompiledHeaders||!r.cachedResult?.cacheHit||r.cachedResult?.files?.["BAI.OUT"]!=="45\n"||r.cachedResult?.error||r.stdoutResult?.error||r.stdoutResult?.stdout!=="Hello bro!\n")process.exit(1)'
     break
   fi
   sleep 1

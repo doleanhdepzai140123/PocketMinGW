@@ -28,7 +28,7 @@ export async function loadWorkspace(): Promise<Workspace> {
 }
 export function saveWorkspace(workspace: Workspace): Promise<void> {
   const serialized = JSON.stringify(workspace);
-  const snapshot = JSON.parse(serialized) as Workspace;
+  const snapshot = validateWorkspace(JSON.parse(serialized));
   const operation = queue.catch(() => {}).then(async () => {
     let previous: Workspace | null = null;
     try { previous = validateWorkspace(JSON.parse(String((await Filesystem.readFile({ path: `${rootFolder}/workspace.json`, ...options })).data))); } catch { /* first save */ }
@@ -48,6 +48,10 @@ export function saveWorkspace(workspace: Workspace): Promise<void> {
       if (!snapshot.projects.some(next => next.id === p.id && next.files.some(file => file.path === f.path))) {
         await Filesystem.deleteFile({ path: `${rootFolder}/projects/${p.id}/${validPath(f.path)}`, directory }).catch(() => {});
       }
+    }
+    for (const p of previous?.projects ?? []) if (!snapshot.projects.some(next => next.id === p.id)) {
+      // IDs were validated; remove only this project's sandbox after manifest commit.
+      await Filesystem.rmdir({ path: `${rootFolder}/projects/${p.id}`, directory, recursive: true });
     }
   });
   queue = operation;

@@ -27,9 +27,9 @@ public class PocketRuntimePlugin extends Plugin {
         if (!running.compareAndSet(false, true)) { call.reject("Compiler is already running"); return; }
         worker.execute(() -> {
             try {
-                File directory = new File(getContext().getFilesDir(), "PocketMinGW/toolchain/v1");
+                File directory = new File(getContext().getFilesDir(), "PocketMinGW/toolchain/v2");
                 if (!directory.isDirectory() && !directory.mkdirs()) throw new Exception("Cannot prepare bundled compiler");
-                for (String name : new String[]{"clang.wasm", "lld.wasm", "memfs.wasm", "sysroot.tar", "stdc++.h"}) {
+                for (String name : new String[]{"clang.wasm", "lld.wasm", "memfs.wasm", "sysroot.tar", "stdc++.h", "stdc++.pch"}) {
                     File file = new File(directory, name);
                     if (!file.exists()) {
                         File temporary = new File(directory, name + ".pending");

@@ -38,13 +38,23 @@ public class PocketViewController: CAPBridgeViewController {
                 let code = "#include <bits/stdc++.h>\nusing namespace std;int main(){freopen(\"BAI.INP\",\"r\",stdin);freopen(\"BAI.OUT\",\"w\",stdout);int a,b;cin>>a>>b;vector<int>v={b,a};sort(v.begin(),v.end());auto[x,y]=pair{v[0],v[1]};optional<int>s=x+y;cout<<*s<<\"\\n\";}"
                 let request: [String: Any] = ["files": [["path": "main.cpp", "content": code], ["path": "other-solution.cpp", "content": "int main(){return 99;}"]], "entryFile": "main.cpp", "stdin": "20 22\n", "inputFile": "BAI.INP", "outputFile": "BAI.OUT", "timeLimitMs": 3000]
                 do {
-                    let json = String(data: try JSONSerialization.data(withJSONObject: request), encoding: .utf8)!
+                    let json = String(data: try JSONSerialization.data(withJSONObject: request, options: .sortedKeys), encoding: .utf8)!
                     let assets = Bundle.main.resourceURL!.appendingPathComponent("public/toolchain").path
                     guard let pointer = assets.withCString({ dir in json.withCString { pocket_run(dir, $0) } }) else { return }
                     let result = String(cString: pointer); pocket_free(pointer)
+                    var report = try JSONSerialization.jsonObject(with: Data(result.utf8)) as! [String: Any]
+                    var repeated = request; repeated["stdin"] = "21 24\n"
+                    let console: [String: Any] = ["files": [["path": "main.cpp", "content": "#include <cstdio>\nint main(){puts(\"Hello bro!\");}"]], "stdin": "", "outputFile": "Project.OUT"]
+                    for (name, input) in [("cachedResult", repeated), ("stdoutResult", console)] {
+                        let body = String(data: try JSONSerialization.data(withJSONObject: input, options: .sortedKeys), encoding: .utf8)!
+                        guard let response = assets.withCString({ dir in body.withCString { pocket_run(dir, $0) } }) else { return }
+                        let text = String(cString: response); pocket_free(response)
+                        report[name] = try JSONSerialization.jsonObject(with: Data(text.utf8))
+                    }
+                    let reportText = String(data: try JSONSerialization.data(withJSONObject: report), encoding: .utf8)!
                     let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("PocketMinGW")
                     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                    try result.write(to: folder.appendingPathComponent("simulator-result.json"), atomically: true, encoding: .utf8)
+                    try reportText.write(to: folder.appendingPathComponent("simulator-result.json"), atomically: true, encoding: .utf8)
                 } catch { NSLog("PocketMinGW simulator test: %@", String(describing: error)) }
             }
         }

@@ -87,3 +87,31 @@ test('HSG build mode defaults to active file and persists project mode', async (
   await page.getByRole('button', {name:'Kết quả',exact:true}).click();
   await expect(page.getByText('Chạy file main.cpp.',{exact:false})).toBeVisible();
 });
+
+test('delete files and projects with confirmation, undo and reload', async ({page}) => {
+  await page.goto('/');
+  await page.getByRole('button',{name:'File',exact:true}).click();
+  await page.getByRole('button',{name:'Xóa file main.cpp',exact:true}).click();
+  await page.getByRole('button',{name:'Hủy',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Xóa file main.cpp',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Xóa file main.cpp',exact:true}).click();
+  await page.getByRole('button',{name:'Xóa',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Xóa file main.cpp',exact:true})).toHaveCount(0);
+  await page.locator('.notice').getByRole('button',{name:'Hoàn tác',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Xóa file main.cpp',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Xóa project',exact:true}).click();
+  await page.getByRole('button',{name:'Xóa',exact:true}).click();
+  await expect(page.getByText('Chưa có project. Chạm + ở trên để tạo project mới.')).toBeVisible();
+  await page.locator('.notice').getByRole('button',{name:'Hoàn tác',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Xóa file main.cpp',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Xóa project',exact:true}).click();
+  await page.getByRole('button',{name:'Xóa',exact:true}).click();
+  await page.getByRole('button',{name:'Lưu tất cả'}).click();
+  await page.waitForFunction(()=>document.querySelector('.save-state')?.textContent?.includes('Đã lưu trên máy'));
+  await page.reload();
+  await expect(page.getByText('Chưa có project. Chạm + ở trên để tạo project mới.')).toBeVisible();
+  await page.getByRole('button',{name:'Tạo project'}).click();
+  await page.getByLabel('Tên project').fill('Bắt đầu lại');
+  await page.getByRole('button',{name:'Tạo',exact:true}).click();
+  await expect(page.getByRole('tab',{name:'main.cpp'})).toBeVisible();
+});

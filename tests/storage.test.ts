@@ -3,6 +3,7 @@ import { initialWorkspace } from '../src/core/templates';
 const disk = vi.hoisted(() => new Map<string,string>());
 vi.mock('@capacitor/filesystem',()=>({Directory:{Documents:'docs',Data:'data'},Encoding:{UTF8:'utf8'},Filesystem:{
   mkdir: async()=>{},
+  rmdir: async({path}:{path:string})=>{for(const key of disk.keys())if(key.startsWith(path+'/'))disk.delete(key);},
   readdir: async()=>({files:[...disk.keys()].filter(p=>/^PocketMinGW\/[^/]+$/.test(p)).map(p=>({name:p.split('/').pop()}))}),
   readFile: async({path}:{path:string})=>{if(!disk.has(path))throw Error('missing');return {data:disk.get(path)};},
   writeFile: async({path,data}:{path:string;data:string})=>{disk.set(path,data);},
@@ -28,4 +29,14 @@ test('corrupt copies never silently reset user work',async()=>{
   disk.set('PocketMinGW/workspace.json','broken');
   await expect(loadWorkspace()).rejects.toThrow('Không đọc được');
   expect(disk.get('PocketMinGW/workspace.json')).toBe('broken');
+});
+
+test('deleting a project persists an empty workspace and undo restores its files',async()=>{
+  const w=initialWorkspace();await saveWorkspace(w);const saved=w.projects[0];
+  await saveWorkspace({...w,projects:[],activeProject:''});
+  expect((await loadWorkspace()).projects).toEqual([]);
+  expect([...disk.keys()].some(k=>k.startsWith(`PocketMinGW/projects/${saved.id}/`))).toBe(false);
+  await saveWorkspace(w);
+  expect((await loadWorkspace()).projects[0]).toEqual(saved);
+  expect(disk.get(`PocketMinGW/projects/${saved.id}/${saved.files[0].path}`)).toBe(saved.files[0].content);
 });
